@@ -1,0 +1,68 @@
+import psutil
+import time
+import smtplib
+from email.mime.text import MIMEText
+
+# Configuration
+LOG_FILE = "/path/to/health_log.txt"
+CPU_THRESHOLD = 80  # percentage
+MEMORY_THRESHOLD = 80  # percentage
+DISK_THRESHOLD = 80  # percentage
+NETWORK_THRESHOLD = 1000000  # bytes (1MB/s)
+CHECK_INTERVAL = 60  # seconds
+
+EMAIL_ALERT = True
+EMAIL_CONFIG = {
+    'from': 'your_email@example.com',
+    'to': 'alert_email@example.com',
+    'subject': 'System Health Alert',
+    'smtp_server': 'smtp.example.com',
+    'smtp_port': 587,
+    'smtp_username': 'your_email@example.com',
+    'smtp_password': 'your_email_password',
+}
+
+def send_email_alert(subject, message):
+    if EMAIL_ALERT:
+        msg = MIMEText(message)
+        msg['Subject'] = subject
+        msg['From'] = EMAIL_CONFIG['from']
+        msg['To'] = EMAIL_CONFIG['to']
+
+        try:
+            server = smtplib.SMTP(EMAIL_CONFIG['smtp_server'], EMAIL_CONFIG['smtp_port'])
+            server.starttls()
+            server.login(EMAIL_CONFIG['smtp_username'], EMAIL_CONFIG['smtp_password'])
+            server.sendmail(EMAIL_CONFIG['from'], [EMAIL_CONFIG['to']], msg.as_string())
+            server.quit()
+            print("Alert email sent successfully.")
+        except Exception as e:
+            print(f"Failed to send alert email: {e}")
+
+def log_and_alert(message):
+    with open(LOG_FILE, "a") as log_file:
+        log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {message}\n")
+    send_email_alert(EMAIL_CONFIG['subject'], message)
+
+def check_system_health():
+    cpu_usage = psutil.cpu_percent(interval=1)
+    memory_info = psutil.virtual_memory()
+    disk_usage = psutil.disk_usage('/')
+    net_io = psutil.net_io_counters()
+    
+    if cpu_usage > CPU_THRESHOLD:
+        log_and_alert(f"High CPU usage detected: {cpu_usage}%")
+    if memory_info.percent > MEMORY_THRESHOLD:
+        log_and_alert(f"High Memory usage detected: {memory_info.percent}%")
+    if disk_usage.percent > DISK_THRESHOLD:
+        log_and_alert(f"High Disk usage detected: {disk_usage.percent}%")
+    if net_io.bytes_sent > NETWORK_THRESHOLD or net_io.bytes_recv > NETWORK_THRESHOLD:
+        log_and_alert(f"High Network activity detected: {net_io.bytes_sent + net_io.bytes_recv} bytes")
+
+def main():
+    while True:
+        check_system_health()
+        time.sleep(CHECK_INTERVAL)
+
+if __name__ == "__main__":
+    main()
